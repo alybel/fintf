@@ -1,7 +1,15 @@
 import pandas_datareader.data as pdd
 import datetime as dt
 from pandas import HDFStore
+import time
+from . import settings
+import stockstats as ss
+from pandas_datareader._utils import RemoteDataError
+import numpy as np
 
+def put_to_storage(df = None, name = ''):
+    hdf = HDFStore(settings.storage_path)
+    hdf.put(name, df, format='table', data_columns=True)
 
 def lprint(x):
     print(x)
@@ -20,7 +28,7 @@ def clean_symbol(symbol):
 
 def load_from_store_or_yahoo(start=None, end=None, symbol=None):
     append = False
-    hdf = HDFStore('financial_data_storage.h5')
+    hdf = HDFStore(settings.storage_path)
     today = dt.datetime.today().date()
 
     yahoo_symbol = symbol
@@ -58,7 +66,18 @@ def load_from_store_or_yahoo(start=None, end=None, symbol=None):
         append = True
 
     # if no store was found, use the start and end from above
-    df = get_yahoo_data(start=start, end=end, symbol=yahoo_symbol)
+    df = None
+    count = 0
+    while df is None and count < 10:
+        try:
+            df = get_yahoo_data(start=start, end=end, symbol=yahoo_symbol)
+        except RemoteDataError:
+            time.sleep(10 + int(np.random.rand()*10))
+        count += 1
+
+    if df is None:
+        raise Exception('Even after 10 trials data could not be loaded from yahoo')
+
     # remove blanks in the header
     df.columns = [x.replace(' ', '_') for x in df.columns]
 
@@ -85,3 +104,95 @@ def get_past_5y_of_data(symbol):
     start = today - dt.timedelta(5 * 365)
     end = today + dt.timedelta(1)
     return load_from_store_or_yahoo(start, end, symbol)
+
+def get_symbol(symbol):
+    symbol=clean_symbol(symbol)
+    hdf = HDFStore(settings.storage_path)
+    if symbol in hdf:
+        return hdf[symbol]
+    else:
+        print('data from %s not in storage. You might want to load it with e.g. '
+              'utils.get_past_10y_of_data(symbol)' % symbol)
+
+def add_ti_and_store(symbol):
+    symbol = clean_symbol(symbol)
+    df = get_symbol(symbol)
+    dfi = add_technical_indicators(df)
+    put_to_storage(dfi, 't_%s' % symbol)
+    return dfi
+
+def get_tsymbol(symbol):
+    symbol=clean_symbol(symbol)
+    hdf = HDFStore(settings.storage_path)
+    tsym = 't_%s' % symbol
+    lprint('loaded %s from ti storage' % symbol)
+    if tsym in hdf:
+        return hdf[tsym]
+    else:
+        return add_ti_and_store(symbol)
+
+
+def add_technical_indicators(
+        df,
+        date_column = 'Date',
+        col_names_for_olhcv=None,
+        add_to_existing=False,
+        indicators=None
+):
+    """
+    add technical indicators to OLHC data.
+
+    Args:
+        df: pd.DataFrame
+        col_names_for_olhcv: The column names needed for OLHC datat
+        add_to_existing: is data is joined to an existting dataframe
+        indicators:
+
+    """
+
+
+    if date_column in df:
+        assert df.is_unique
+        assert df.is_monotonic_increasing
+    elif date_column == df.index.name:
+        assert df.index.is_unique
+        assert df.index.is_monotonic_increasing
+    else:
+        raise AttributeError('Date column not found')
+
+    indicators = indicators if indicators is not None else \
+        ['atr', 'tr', 'cci_20', 'rsv_30', 'rsv_60', 'rsv_12', 'rsv_7', 'rsv_5', 'wr_12',
+         'macd', 'rsi_14', 'wr_3', 'wr_5', 'wr_7', 'wr_10', 'wr_14', 'rsi_5', 'rsi_60',
+         'rsi_30', 'rsi_3', 'dma', 'cci', 'kdjd', 'pdi', 'dx']
+    h_data = df.copy()
+
+    # rename columns such that they match the olhcv paradigm from yahoo
+    if col_names_for_olhcv:
+        rename_dict = {}
+        for key in col_names_for_olhcv:
+            rename_dict[col_names_for_olhcv[key]] = key
+        h_data.rename(columns=rename_dict, inplace=True)
+
+    stock = ss.StockDataFrame.retype(h_data)
+    for ti in indicators:
+        stock.get(ti)
+
+    indicators.append('close')
+
+    h_data = h_data[indicators].copy()
+
+    # add momentum variables
+    for p in [5, 10, 50, 60, 100, 200]:
+        h_data['mom_%d' % p] = h_data['close'].diff(p)
+
+    # add moving averages
+    for ma in [5,10,20, 50, 100, 200]:
+        for col in ['mom_60', 'mom_10']:
+            h_data['%s_ma_%d' % (col, ma)] = h_data[col].rolling(ma).mean()
+
+    for p in [1,10,20]:
+        h_data['ret_%dd' % p] = h_data['close'].pct_change(p).shift(-p)
+        indicators.append('ret_%dd' % p)
+
+
+    return h_data

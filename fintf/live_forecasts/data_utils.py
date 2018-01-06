@@ -1,6 +1,8 @@
 from .. import utils
-
-def load_data_for_symbols():
+import time
+def refresh_data_for_symbols():
     symbols = ['SPY', 'VXX', 'GDX', 'XIV', 'EURUSD=x']
     for symbol in symbols:
+        print('loading %s' % symbol)
         utils.get_past_5y_of_data(symbol)
+        utils.add_ti_and_store(symbol)

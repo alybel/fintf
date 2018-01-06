@@ -1,0 +1,1 @@
+storage_path='../data/financial_data_storage.h5'
