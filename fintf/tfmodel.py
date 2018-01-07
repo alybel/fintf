@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from . import utils
 import hashlib
+from . import fc_frame
 
 class TF_LSTM_Regressor(object):
     def __init__(self, input_dim, validation_ratio=.3, look_back=1):
@@ -28,7 +29,7 @@ class TF_LSTM_Regressor(object):
         estimators.append(('mlp', KerasRegressor(
             build_fn=self.baseline_model,
             epochs=50,
-            batch_size=32,
+            batch_size=256,
             verbose=1,
             callbacks=[early_stopping, reduce_lr_loss],  # , mcp_save],
             validation_split=self.validation_ratio
@@ -72,7 +73,7 @@ class TF_Regressor1(object):
         estimators.append(('mlp', KerasRegressor(
             build_fn=self.baseline_model,
             epochs=50,
-            batch_size=32,
+            batch_size=128,
             verbose=1,
             callbacks=[early_stopping, reduce_lr_loss],  # , mcp_save],
             validation_split=self.validation_ratio
@@ -136,7 +137,7 @@ def train_lstm_regressor_model(
         backtest_settings=None,
         target=None,
         hide_columns=None,
-        validation_ratio=0,
+        validation_ratio=0.2,
         look_back=5
 ):
     df.dropna(inplace=True)
@@ -160,12 +161,16 @@ def train_lstm_regressor_model(
                             look_back=look_back,
                             date_column=date_column)
 
-    tfc = None
-    # tfc = ts_forecasts.TFC(df=X, date_column=date_column)
-    # tfc.train_model(target=target, hide_columns=hide_columns, model=model, **backtest_settings)
+
+    tfc = fc_frame.FF(df=X, date_column=date_column)
+    tfc.train(
+        target=target,
+        hide_columns=hide_columns,
+        model=model,
+        **backtest_settings)
     y = df[target][look_back : ]
-    model.fit(X, y)
-    return X,  y#atfc
+    #model.fit(X, y)
+    return X, y, model
 
 def get_key_for_lstm_dataset(df, date_column, look_back):
     s = df.columns.__str__() + \
