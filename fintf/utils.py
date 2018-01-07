@@ -131,6 +131,30 @@ def get_tsymbol(symbol):
     else:
         return add_ti_and_store(symbol)
 
+import pickle
+import os
+def see_if_in_cache(key):
+    fn = os.path.join(settings.data_path, key + '.pkl')
+    if os.path.isfile(fn):
+        return pickle.load(open(fn, 'rb'))
+    #hdf = HDFStore(settings.proccess_cache)
+    #if key in hdf:
+    #    return hdf[key]
+
+def put_in_cache(df, key):
+    fn = os.path.join(settings.data_path, key + '.pkl')
+    pickle._dump(df, open(fn, 'wb'))
+    #hdf = HDFStore(settings.proccess_cache)
+    #hdf.put(key, df, format='table', data_columns=True)
+
+
+def assert_date_monotonic_increasing(df, date_column):
+    if date_column in df:
+        assert df[date_column].is_monotonic_increasing
+    elif date_column == df.index.name:
+        assert df.index.is_monotonic_increasing
+    else:
+        raise AttributeError('Date column not found on df')
 
 def add_technical_indicators(
         df,

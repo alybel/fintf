@@ -49,15 +49,16 @@ class FF(object):
               hide_columns=None,
               split_ratio=.7,
               training_window=1000,
-              oos_window=10,
+              oos_window=None,
               step_size=10,
-              test_train_diff_days=0,
+              test_train_diff_days=1,
               sample_weights=None,
               kwargs=None):
         if hide_columns is None:
             hide_columns = []
+
         self.training_window = training_window
-        self.oos_window = oos_window
+        self.oos_window = step_size
         self.test_train_diff_days = test_train_diff_days
         self.split_ratio = split_ratio
         self.step_size = step_size
@@ -67,7 +68,6 @@ class FF(object):
         self._prepare_X_and_y_data(hide_columns=hide_columns)
 
         self.backtest_method = backtest_method
-
 
 
         if self.backtest_method == 'simple_split':
@@ -122,6 +122,8 @@ class FF(object):
 
                 self._train_clf(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test,
                                 run_no=i, sample_weight=sample_weight_train)
+
+                print('%1.1f %%' % (100 * i / n_iter), end='\r')
 
             if self.training_results['oos_pred'] and self.training_results['oos_truth']:
                 self.res_df = pd.DataFrame()
