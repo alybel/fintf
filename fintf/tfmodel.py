@@ -163,8 +163,9 @@ def train_lstm_regressor_model(
     tfc = None
     # tfc = ts_forecasts.TFC(df=X, date_column=date_column)
     # tfc.train_model(target=target, hide_columns=hide_columns, model=model, **backtest_settings)
-    model.fit(X, df[target][look_back -1 : ])
-    return X #atfc
+    y = df[target][look_back : ]
+    model.fit(X, y)
+    return X,  y#atfc
 
 def get_key_for_lstm_dataset(df, date_column, look_back):
     s = df.columns.__str__() + \
@@ -176,6 +177,13 @@ def get_key_for_lstm_dataset(df, date_column, look_back):
 
 
 def create_LSTM_dataset(df, date_column, look_back=1):
+
+    if not df.index.name == date_column:
+        df.set_index(date_column, inplace=True)
+    rm = df.ewm(halflife=100).mean()
+    rstd = df.ewm(halflife=100).std()
+    df = (df - rm) / rstd
+
     df.dropna(inplace=True)
     key = get_key_for_lstm_dataset(df, date_column, look_back)
     df_store = None
