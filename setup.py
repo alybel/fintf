@@ -22,3 +22,6 @@ setup(
         "Topic :: Utilities",
     ], install_requires=[]
 )
+from fintf import settings
+
+os.makedirs(settings.data_path)
