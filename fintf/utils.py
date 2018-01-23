@@ -6,6 +6,7 @@ from . import settings
 import stockstats as ss
 from pandas_datareader._utils import RemoteDataError
 import numpy as np
+from uin_fc_lib import utils as uinutils
 
 
 def put_to_storage(df=None, name=''):
@@ -259,6 +260,7 @@ class MetaModel(object):
                  specific_model_settings=None
                  ):
         self.df = df.copy()
+
         if not isinstance(target_dict, dict):
             raise AttributeError('Targets need to be provided as a dictionary')
         self.target_dict = target_dict
@@ -297,18 +299,25 @@ class MetaModel(object):
             hide_columns,
             backtest_settings,
             date_column,
-            specific_model_settings=None
-    ):
-        tfc = ts_forecasts.TFC(date_column=date_column, df=df)
+            specific_model_settings=None):
         if specific_model_settings is not None:
             backtest_settings = specific_model_settings
+
+        tfc_cand = uinutils.see_if_model_exists_and_load_instead(
+            df_orig=df, model=model, target=target, hide_columns=hide_columns, date_column=date_column,
+            **backtest_settings)
+        print('the exact model on these data was found and loaded from file')
+        if tfc_cand is not None:
+            return tfc_cand
+        tfc = ts_forecasts.TFC(date_column=date_column, df=df)
         tfc.train_model(model=model, target=target, hide_columns=hide_columns, **backtest_settings)
+        uinutils.save_model(tfc, tfc.name)
         return tfc
 
     def run(self):
-        data = None
+
         for i, layer in enumerate(self.model_cascade):
-            print('running layer %d', i)
+            print('running layer %d' % i)
             this_layer_results = {}
             for model in layer:
                 specific_model_settings = None
@@ -318,6 +327,7 @@ class MetaModel(object):
                 for key in self.target_dict:
                     if model in self.target_dict[key]:
                         target_col = key
+
                 tfc = self._run_in_loop(
                     model=layer[model],
                     df=self.df,
@@ -361,3 +371,19 @@ class MetaModel(object):
 
     def get_data(self):
         return self.df
+
+
+def join_unemployment_data(df):
+    # Join additional data sources, e.g. unemployment, gold as an indicator for demand of security, Short-Term and Long Term Bond Yields
+    unemployment = pd.read_csv('C:/Users/AL_BC/Downloads/DP_LIVE_18012018171856485.csv')
+    # select monthly US unemployment as relative to workforce figure
+    unemployment = unemployment[
+        (unemployment.LOCATION == 'USA') & (unemployment.SUBJECT == 'TOT') & (unemployment.MEASURE == 'PC_LF') & (
+                unemployment.FREQUENCY == 'M')]
+    unemployment.TIME = pd.to_datetime(unemployment.TIME)
+    unemployment.set_index('TIME', inplace=True)
+    dft = pd.concat([df, unemployment['Value']], axis=1)
+    dft.Value.fillna(method='ffill', inplace=True)
+    dft.dropna(inplace=True)
+    dft.rename(columns={'Value': 'unemp_rate'}, inplace=True)
+    return dft

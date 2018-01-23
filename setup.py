@@ -24,4 +24,5 @@ setup(
 )
 from fintf import settings
 
-os.makedirs(settings.data_path)
+if not os.path.exists(settings.data_path):
+    os.makedirs(settings.data_path)
