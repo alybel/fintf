@@ -20,7 +20,7 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Topic :: Utilities",
-    ], install_requires=[]
+    ], install_requires=['pandas', ]
 )
 from fintf import settings
 
