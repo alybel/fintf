@@ -89,9 +89,15 @@ def load_from_store_or_yahoo(start=None, end=None, symbol=None):
 
     # store or append to hdf5 storage
 
+    if symbol in hdf:
+        # drop duplicates
+        exist_df = hdf[symbol]
+        df = df[~df.index.isin(exist_df.index)]
+
     if append:
         hdf.append(symbol, df, format='table', data_columns=True)
     else:
+        df.drop_duplicates(inplace=True)
         hdf.put(symbol, df, format='table', data_columns=True)
     if not df.index.is_unique:
         lprint('index of %s is not unique' % symbol)

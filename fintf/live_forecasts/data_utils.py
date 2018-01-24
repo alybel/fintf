@@ -26,3 +26,4 @@ def initialize_data_for_symbols():
     for key in times:
         utils.load_from_store_or_yahoo(start=times[key], end=datetime.date.today(), symbol=key)
         utils.add_ti_and_store(key)
+        print(key)
