@@ -28,6 +28,7 @@ def get_yahoo_quote(symbol=None):
 
 def clean_symbol(symbol):
     symbol = symbol.replace('=x', '')
+    symbol = symbol.replace('^', '')
     return symbol
 
 
