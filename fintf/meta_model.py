@@ -11,7 +11,7 @@ class MetaModel(object):
                  backtest_settings=None,
                  date_column=None,
                  model_cascade=None,
-                 specific_model_settings=None
+                 model_specific_backtest_settings=None
                  ):
         self.df = df.copy()
         if not self.df.index.name == date_column:
@@ -42,9 +42,9 @@ class MetaModel(object):
         self.model_cascade = model_cascade
         self.results = {}
 
-        self.specific_model_settings = {}
-        if specific_model_settings is not None:
-            self.specific_model_settings = specific_model_settings
+        self.model_specific_backtest_settings = {}
+        if model_specific_backtest_settings is not None:
+            self.model_specific_backtest_settings = model_specific_backtest_settings
 
     @staticmethod
     def _run_in_loop(
@@ -54,9 +54,9 @@ class MetaModel(object):
             hide_columns,
             backtest_settings,
             date_column,
-            specific_model_settings=None):
-        if specific_model_settings is not None:
-            backtest_settings = specific_model_settings
+            model_specific_backtest_settings=None):
+        if model_specific_backtest_settings is not None:
+            backtest_settings = model_specific_backtest_settings
 
         tfc_cand = uinutils.see_if_model_exists_and_load_instead(
             df_orig=df, model=model, target=target, hide_columns=hide_columns, date_column=date_column,
@@ -77,15 +77,14 @@ class MetaModel(object):
             this_layer_results = {}
             for model in layer:
                 specific_model_settings = None
-                if model in self.specific_model_settings and self.specific_model_settings[model] is not None:
-                    specific_model_settings = self.specific_model_settings[model]
+                if model in self.model_specific_backtest_settings and self.model_specific_backtest_settings[model] is not None:
+                    specific_model_settings = self.model_specific_backtest_settings[model]
                 target_col = None
                 for key in self.target_dict:
                     if model in self.target_dict[key]:
                         target_col = key
                 print('####')
                 print('running model %s' % model)
-                print('%s' % self.df.shape.__str__())
                 print('####')
                 tfc = self._run_in_loop(
                     model=layer[model],
@@ -94,7 +93,7 @@ class MetaModel(object):
                     backtest_settings=self.backtest_settings,
                     target=target_col,
                     date_column=self.date_column,
-                    specific_model_settings=specific_model_settings
+                    model_specific_backtest_settings=specific_model_settings
                 )
                 this_layer_results[model] = tfc
                 self.results[model] = tfc
@@ -163,16 +162,16 @@ def meta_model_1(
 
          },
         {
-            'm3': RandomForestClassifier(n_estimators=1000, max_depth=5, min_samples_leaf=50),
-            'm4': RandomForestRegressor(n_estimators=1000, max_depth=5, min_samples_leaf=50),
-            'mv4': RandomForestRegressor(n_estimators=1000, max_depth=5, min_samples_leaf=50),
+            'm3': RandomForestClassifier(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
+            'm4': RandomForestRegressor(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
+            'mv4': RandomForestRegressor(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
         },
         {
             'm51': Ridge(alpha=3),
             'm5': Ridge(alpha=5),
             'm6': LogisticRegression(),
-            'm63': RandomForestClassifier(n_estimators=1000, max_depth=5, min_samples_leaf=50),
-            'm64': RandomForestRegressor(n_estimators=1000, max_depth=5, min_samples_leaf=50)
+            'm63': RandomForestClassifier(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
+            'm64': RandomForestRegressor(n_estimators=1000, max_depth=3, min_samples_leaf=.15)
         }
     ]
 
@@ -189,13 +188,18 @@ def meta_model_1(
         'test_train_diff_days': target_horizon
     }
 
+    base = bs.copy()
+    base.update({'run_slim': False})
+    sms = {'m64': base}
+
     mm = MetaModel(
         backtest_settings=bs,
         df=df,
         target_dict=target_dict,
         model_cascade=mc,
         date_column=date_column,
-        hide_columns=hide_columns
+        hide_columns=hide_columns,
+        model_specific_backtest_settings=sms
     )
 
     return mm
