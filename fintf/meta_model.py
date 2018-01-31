@@ -14,7 +14,8 @@ class MetaModel(object):
                  specific_model_settings=None
                  ):
         self.df = df.copy()
-
+        if not self.df.index.name == date_column:
+            self.df.set_index(date_column, inplace=True)
         if not isinstance(target_dict, dict):
             raise AttributeError('Targets need to be provided as a dictionary')
         self.target_dict = target_dict
@@ -60,8 +61,9 @@ class MetaModel(object):
         tfc_cand = uinutils.see_if_model_exists_and_load_instead(
             df_orig=df, model=model, target=target, hide_columns=hide_columns, date_column=date_column,
             **backtest_settings)
-        print('the exact model on these data was found and loaded from file')
         if tfc_cand is not None:
+            print('the exact model on these data was found and loaded from file')
+            print("return stored model instead")
             return tfc_cand
         tfc = ts_forecasts.TFC(date_column=date_column, df=df)
         tfc.train_model(model=model, target=target, hide_columns=hide_columns, **backtest_settings)
@@ -81,10 +83,13 @@ class MetaModel(object):
                 for key in self.target_dict:
                     if model in self.target_dict[key]:
                         target_col = key
-
+                print('####')
+                print('running model %s' % model)
+                print('%s' % self.df.shape.__str__())
+                print('####')
                 tfc = self._run_in_loop(
                     model=layer[model],
-                    df=self.df,
+                    df=self.df.copy(),
                     hide_columns=self.hide_columns,
                     backtest_settings=self.backtest_settings,
                     target=target_col,
@@ -108,14 +113,22 @@ class MetaModel(object):
                     data.rename(columns={'prob': '%s_%s_prob' % (trained_model, target_col)}, inplace=True)
                     print('joined %s' % ('%s_%s_prob' % (trained_model, target_col)))
                     self.df = self.df.join(data['%s_%s_prob' % (trained_model, target_col)])
+                    if self.df['%s_%s_prob' % (trained_model, target_col)].isnull().all():
+                        raise Exception('joining model results from %s failed' % trained_model)
 
                 # This is the Regression Case
                 else:
                     data.rename(columns={'pred': '%s_%s_pred' % (trained_model, target_col)}, inplace=True)
                     self.df = self.df.join(data['%s_%s_pred' % (trained_model, target_col)])
+                    if self.df['%s_%s_pred' % (trained_model, target_col)].isnull().all():
+                        raise Exception('joining model results from %s failed' % trained_model)
 
                 # clean self.df
                 self.df.dropna(inplace=True)
+                if self.df.shape[0] == 0:
+                    raise Exception('Something went wrong when joining the probabilites from previous models. probably '
+                                    'the prediction column is all zero.')
+
                 self.df = self.df.join(data['__oos__'])
                 self.df = self.df[self.df['__oos__'] == 1]
                 self.df.drop(['__oos__'], axis=1, inplace=True)
@@ -125,3 +138,64 @@ class MetaModel(object):
 
     def get_data(self):
         return self.df
+
+
+from sklearn.linear_model import Ridge, LogisticRegression, LinearRegression
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+
+
+def meta_model_1(
+        df=None,
+        class_target='',
+        regr_target='',
+        vola_target='',
+        step_size=100,
+        hide_columns=None,
+        date_column=None,
+        target_horizon=1,
+        training_window=1000,
+):
+    mc = [
+        {'m1': Ridge(alpha=5),
+         'm2': LogisticRegression(),
+         'mv1': RandomForestRegressor(n_estimators=1000, min_samples_leaf=.15),
+         'mv2': Ridge(alpha=5),
+
+         },
+        {
+            'm3': RandomForestClassifier(n_estimators=1000, max_depth=5, min_samples_leaf=50),
+            'm4': RandomForestRegressor(n_estimators=1000, max_depth=5, min_samples_leaf=50),
+            'mv4': RandomForestRegressor(n_estimators=1000, max_depth=5, min_samples_leaf=50),
+        },
+        {
+            'm51': Ridge(alpha=3),
+            'm5': Ridge(alpha=5),
+            'm6': LogisticRegression(),
+            'm63': RandomForestClassifier(n_estimators=1000, max_depth=5, min_samples_leaf=50),
+            'm64': RandomForestRegressor(n_estimators=1000, max_depth=5, min_samples_leaf=50)
+        }
+    ]
+
+    target_dict = {
+        class_target: ['m2', 'm3', 'm6', 'm63'],
+        regr_target: ['m1', 'm4', 'm5', 'm51', 'm64'],
+        vola_target: ['mv1', 'mv2', 'mv4']
+    }
+
+    bs = {
+        'backtest_method': 'walk_forward_rolling',
+        'training_window': training_window,
+        'step_size': step_size,
+        'test_train_diff_days': target_horizon
+    }
+
+    mm = MetaModel(
+        backtest_settings=bs,
+        df=df,
+        target_dict=target_dict,
+        model_cascade=mc,
+        date_column=date_column,
+        hide_columns=hide_columns
+    )
+
+    return mm

@@ -7,6 +7,7 @@ import stockstats as ss
 from pandas_datareader._utils import RemoteDataError
 import numpy as np
 from uin_fc_lib import utils as uinutils
+import pandas as pd
 
 
 def put_to_storage(df=None, name=''):
