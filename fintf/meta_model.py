@@ -77,7 +77,8 @@ class MetaModel(object):
             this_layer_results = {}
             for model in layer:
                 specific_model_settings = None
-                if model in self.model_specific_backtest_settings and self.model_specific_backtest_settings[model] is not None:
+                if model in self.model_specific_backtest_settings and self.model_specific_backtest_settings[
+                    model] is not None:
                     specific_model_settings = self.model_specific_backtest_settings[model]
                 target_col = None
                 for key in self.target_dict:
@@ -148,37 +149,45 @@ def meta_model_1(
         class_target='',
         regr_target='',
         vola_target='',
+        target_double_the_time='',
         step_size=100,
         hide_columns=None,
         date_column=None,
         target_horizon=1,
         training_window=1000,
+        n_estimators=10
 ):
     mc = [
         {'m1': Ridge(alpha=5),
          'm2': LogisticRegression(),
-         'mv1': RandomForestRegressor(n_estimators=1000, min_samples_leaf=.15),
+         'mv1': RandomForestRegressor(n_estimators=n_estimators, min_samples_leaf=.15),
          'mv2': Ridge(alpha=5),
+         'md1': Ridge(alpha=5),
+         'ms1': RandomForestClassifier(n_estimators=n_estimators, min_samples_leaf=.15),
 
          },
         {
-            'm3': RandomForestClassifier(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
-            'm4': RandomForestRegressor(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
-            'mv4': RandomForestRegressor(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
+            'm3': RandomForestClassifier(n_estimators=n_estimators, max_depth=2, min_samples_leaf=.15),
+            'm4': RandomForestRegressor(n_estimators=n_estimators, max_depth=2, min_samples_leaf=.15),
+            'mv4': RandomForestRegressor(n_estimators=n_estimators, max_depth=2, min_samples_leaf=.15),
+            'md2': Ridge(alpha=5),
+            'ms2': Ridge(alpha=5),
+            'ms3': RandomForestRegressor(n_estimators=n_estimators, max_depth=2, min_samples_leaf=.15),
         },
         {
             'm51': Ridge(alpha=3),
             'm5': Ridge(alpha=5),
             'm6': LogisticRegression(),
-            'm63': RandomForestClassifier(n_estimators=1000, max_depth=3, min_samples_leaf=.15),
-            'm64': RandomForestRegressor(n_estimators=1000, max_depth=3, min_samples_leaf=.15)
+            'm63': RandomForestClassifier(n_estimators=n_estimators, max_depth=2, min_samples_leaf=.15),
+            'm64': RandomForestRegressor(n_estimators=n_estimators, max_depth=2, min_samples_leaf=.15)
         }
     ]
 
     target_dict = {
-        class_target: ['m2', 'm3', 'm6', 'm63'],
-        regr_target: ['m1', 'm4', 'm5', 'm51', 'm64'],
-        vola_target: ['mv1', 'mv2', 'mv4']
+        class_target: ['m2', 'm3', 'm6', 'm63', 'ms1'],
+        regr_target: ['m1', 'm4', 'm5', 'm51', 'm64', 'ms2', 'ms3'],
+        vola_target: ['mv1', 'mv2', 'mv4'],
+        target_double_the_time: ['md1', 'md2']
     }
 
     bs = {
@@ -189,8 +198,15 @@ def meta_model_1(
     }
 
     base = bs.copy()
-    base.update({'run_slim': False})
-    sms = {'m64': base}
+    base.update({'run_slim': True, 'step_size': 10})
+
+    md = bs.copy()
+    md.update({'test_train_diff_days': 2 * target_horizon})
+
+    ms = bs.copy()
+    ms.update({'training_window': int(training_window/20)})
+
+    sms = {'m64': base, 'md1': md, 'md2': md, 'ms1': ms, 'ms2': ms, 'ms3': ms}
 
     mm = MetaModel(
         backtest_settings=bs,
